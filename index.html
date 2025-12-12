@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KidQuest: Ultimate Study Dashboard</title>
+    <style>
+        /* CSS - STYLING */
+        body {
+            background: #e0f2f1;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        h1 { text-align: center; color: #00796b; margin-bottom: 10px; }
+
+        #liveClock {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00796b;
+            text-align: center;
+            background: white;
+            width: fit-content;
+            margin: 0 auto 20px auto;
+            padding: 10px 30px;
+            border-radius: 50px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .dashboard {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding-bottom: 20px;
+        }
+
+        .panel {
+            min-width: 320px;
+            flex: 1;
+            background: white;
+            border-radius: 25px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-top: 10px solid #4db6ac;
+        }
+
+        /* Panel Colors */
+        .planner { border-color: #ff7043; }
+        .vault { border-color: #9575cd; }
+        .tracker { border-color: #4db6ac; }
+        .ideas { border-color: #fdd835; }
+
+        input[type="text"], input[type="date"], input[type="time"] {
+            width: 90%;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 12px;
+            border: 2px solid #eee;
+        }
+
+        button {
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        button:active { transform: scale(0.95); }
+
+        .add-btn { background: #4caf50; color: white; }
+        .vault-btn { background: #9c27b0; color: white; }
+        .notify-btn { background: #ff9800; color: white; width: auto; display: block; margin: 0 auto 20px auto; }
+        .move-btn { background: #ff9800; color: white; font-size: 11px; padding: 5px; width: auto; margin: 0; }
+
+        ul { list-style: none; padding: 0; }
+        li {
+            background: #f9f9f9;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-left: 5px solid #4db6ac;
+        }
+
+        .done { text-decoration: line-through; color: #aaa; background: #f1f1f1; }
+        
+        .time-tag {
+            background: #e1f5fe;
+            color: #0288d1;
+            padding: 3px 8px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 5px;
+        }
+
+        .progress-bar {
+            background: #eee;
+            height: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        #fill { background: #4caf50; height: 100%; width: 0%; border-radius: 10px; transition: 0.5s; }
+    </style>
+</head>
+<body>
+
+    <h1>🌟 My Study Adventure Dashboard 🌟</h1>
+    
+    <div id="liveClock">00:00:00 PM</div>
+    
+    <button class="notify-btn" onclick="requestNotify()">🔔 Click to Enable Alerts & Sound</button>
+
+    <div class="dashboard">
+
+        <section class="panel planner">
+            <h2>📅 Daily Planner</h2>
+            <input type="date" id="datePicker" onchange="refresh()">
+            <input type="text" id="taskInput" placeholder="Task name...">
+            <input type="time" id="timeInput">
+            <button class="add-btn" onclick="addNewTask()">Add to Schedule</button>
+            <ul id="taskList"></ul>
+        </section>
+
+        <section class="panel vault">
+            <h2>🎒 Future Bag</h2>
+            <p>Save missions for later:</p>
+            <input type="text" id="vaultInput" placeholder="Someday I will...">
+            <button class="vault-btn" onclick="addToVault()">Keep in Bag</button>
+            <ul id="vaultList"></ul>
+        </section>
+
+        <section class="panel tracker">
+            <h2>🏆 Goal Tracker</h2>
+            <p id="statsDate">Pick a date...</p>
+            <div class="progress-bar"><div id="fill"></div></div>
+            <p id="motivate">Add tasks to start!</p>
+        </section>
+
+        <section class="panel ideas">
+            <h2>💡 Magic Ideas</h2>
+            <p id="ideaDisplay">Need a fun study tip?</p>
+            <button onclick="generateIdea()" style="background:#fff176; color: #333; border: 1px solid #ddd;">Get Idea</button>
+        </section>
+
+    </div>
+
+    <audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
+    <script>
+        let data = JSON.parse(localStorage.getItem('myMissions')) || {}; 
+        let vault = JSON.parse(localStorage.getItem('myVault')) || [];
+        const sound = document.getElementById('notifSound');
+
+        window.onload = () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('datePicker').value = today;
+            setInterval(updateClock, 1000); 
+            refresh();
+            updateVaultUI(); 
+        };
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('liveClock').innerText = now.toLocaleTimeString();
+            checkDeadlines(now);
+            
+            // Re-render task list every minute to update "Time Left"
+            if (now.getSeconds() === 0) {
+                refresh();
+            }
+        }
+
+        // Calculation for "Time Left"
+        function getTimeLeft(targetTime, targetDate) {
+            if (!targetTime) return "No Time Set";
+            
+            const now = new Date();
+            const [hours, minutes] = targetTime.split(':');
+            const deadline = new Date(targetDate);
+            deadline.setHours(hours, minutes, 0);
+
+            const diff = deadline - now;
+
+            if (diff <= 0) return "⌛ Started / Passed";
+
+            const diffHrs = Math.floor(diff / (1000 * 60 * 60));
+            const diffMins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+            return `⏳ ${diffHrs}h ${diffMins}m left`;
+        }
+
+        function requestNotify() {
+            Notification.requestPermission().then(perm => {
+                if(perm === "granted") {
+                    sound.play(); 
+                    alert("Notifications and Sounds are active!");
+                }
+            });
+        }
+
+        function checkDeadlines(now) {
+            const today = now.toISOString().split('T')[0];
+            const currentTime = now.getHours().toString().padStart(2, '0') + ":" + 
+                              now.getMinutes().toString().padStart(2, '0');
+            
+            if (data[today]) {
+                data[today].forEach(task => {
+                    if (task.time === currentTime && !task.notified && !task.done) {
+                        if (Notification.permission === "granted") {
+                            new Notification("Mission Deadline!", { body: task.text });
+                        }
+                        sound.play();
+                        task.notified = true; 
+                        saveData();
+                    }
+                });
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('myMissions', JSON.stringify(data));
+            localStorage.setItem('myVault', JSON.stringify(vault));
+        }
+
+        function refresh() {
+            const date = document.getElementById('datePicker').value;
+            const list = document.getElementById('taskList');
+            const statsDate = document.getElementById('statsDate');
+            
+            statsDate.innerText = "Progress for: " + date;
+            list.innerHTML = "";
+            
+            const tasks = data[date] || [];
+            let completed = 0;
+
+            tasks.forEach((t, i) => {
+                const li = document.createElement('li');
+                li.className = t.done ? 'done' : '';
+                
+                // Calculate time left live
+                const timeStatus = getTimeLeft(t.time, date);
+
+                li.innerHTML = `
+                    <span>
+                        <b>${t.text}</b> <br> 
+                        <span class="time-tag">${timeStatus}</span>
+                    </span>
+                    <div>
+                        <input type="checkbox" ${t.done ? 'checked' : ''} onclick="check('${date}', ${i})">
+                        <button onclick="del('${date}', ${i})" style="background:none; cursor:pointer; width:auto; display:inline;">🗑️</button>
+                    </div>
+                `;
+                list.appendChild(li);
+                if(t.done) completed++;
+            });
+
+            const bar = document.getElementById('fill');
+            const percent = tasks.length ? (completed / tasks.length) * 100 : 0;
+            bar.style.width = percent + "%";
+            document.getElementById('motivate').innerText = percent === 100 ? "Amazing! Perfect day! 🌟" : "Keep going!";
+            
+            saveData(); 
+        }
+
+        function addNewTask() {
+            const date = document.getElementById('datePicker').value;
+            const text = document.getElementById('taskInput').value;
+            const time = document.getElementById('timeInput').value;
+            
+            if(!text || !date) return;
+            if(!data[date]) data[date] = [];
+            
+            data[date].push({text: text, time: time, done: false, notified: false});
+            document.getElementById('taskInput').value = "";
+            document.getElementById('timeInput').value = "";
+            refresh();
+        }
+
+        function check(date, i) {
+            data[date][i].done = !data[date][i].done;
+            refresh();
+        }
+
+        function del(date, i) {
+            data[date].splice(i, 1);
+            refresh();
+        }
+
+        function addToVault() {
+            const val = document.getElementById('vaultInput').value;
+            if(!val) return;
+            vault.push(val);
+            document.getElementById('vaultInput').value = "";
+            updateVaultUI();
+        }
+
+        function updateVaultUI() {
+            const vList = document.getElementById('vaultList');
+            vList.innerHTML = "";
+            vault.forEach((item, i) => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span>${item}</span> <button class="move-btn" onclick="move(${i})">Plan It</button>`;
+                vList.appendChild(li);
+            });
+            saveData();
+        }
+
+        function move(i) {
+            const date = document.getElementById('datePicker').value;
+            if(!date) return alert("Select a date in the Daily Planner first!");
+            if(!data[date]) data[date] = [];
+            data[date].push({text: vault[i], time: "", done: false, notified: false});
+            vault.splice(i, 1);
+            updateVaultUI();
+            refresh();
+        }
+
+        const tips = ["Summarize 1 page", "Quiz yourself", "Draw your notes", "Study for 15 mins", "Teach a parent", "Build a LEGO model", "Do 10 jumping jacks"];
+        function generateIdea() {
+            const rand = tips[Math.floor(Math.random() * tips.length)];
+            document.getElementById('ideaDisplay').innerText = rand;
+        }
+    </script>
+</body>
+</html>
