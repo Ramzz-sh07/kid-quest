@@ -332,6 +332,33 @@
             const rand = tips[Math.floor(Math.random() * tips.length)];
             document.getElementById('ideaDisplay').innerText = rand;
         }
+
+
+        function move(i) {
+    const date = document.getElementById('datePicker').value;
+    if(!date) return alert("Select a date in the Daily Planner first!");
+    
+    // Ask the user for a time
+    let userTime = prompt(`What time should we schedule "${vault[i]}"? (Use 24h format like 14:30 or leave blank)`, "12:00");
+
+    // If the user didn't click "Cancel"
+    if (userTime !== null) {
+        if(!data[date]) data[date] = [];
+        
+        // Push the item from the vault into the planner with the chosen time
+        data[date].push({
+            text: vault[i], 
+            time: userTime, 
+            done: false, 
+            notified: false
+        });
+
+        // Remove from vault and update screen
+        vault.splice(i, 1);
+        updateVaultUI();
+        refresh();
+    }
+}
     </script>
 </body>
 </html>
